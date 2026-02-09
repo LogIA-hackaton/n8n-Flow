@@ -1,0 +1,735 @@
+{
+  "name": "Hackathon",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "audio",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d6bab292-012f-42fa-8f6c-d9dbbc3edf04",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "audio-receiver"
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "operation": "speechToText",
+        "file": "file",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        288,
+        0
+      ],
+      "id": "88e4b459-1599-44f8-b977-666fe674b975",
+      "name": "Transcribe audio or video",
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "w6YEzRbgp7araVT5",
+          "name": "ElevenLabs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        576,
+        160
+      ],
+      "id": "8433dae4-6ce8-427c-890f-0fc33ac86086",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HUv5MEwN9aoQtkZr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# AGENTE DE PLANIFICACIÓN - CENTRO LOGÍSTICO\nEres un agente que recibe transcripciones de comandos emitidos desde un centro logístico y los traduce en llamadas a herramientas ejecutables.\n\n## RECURSO: PRODUCTS\nAtributos: `sku`, `name`, `quantity`, `stored_at`\n\n## HERRAMIENTAS DISPONIBLES\n\n### Basadas en SKU (cuando se conoce el código)\n- `newProduct(sku, name, ...)`: crear producto nuevo\n- `fetchProduct(sku)`: leer atributos\n- `changeStock(sku, cantidad)`: modificar cantidad (+ agregar, - restar)\n- `emptyProduct(sku)`: vaciar stock\n- `setLocation(sku, ubicacion)`: establecer ubicación\n- `getLocation(sku)`: consultar ubicación\n- `delete(sku)`: eliminar producto\n- `updateProduct(sku, ...)`: actualizar atributos\n\n### Basadas en Nombre (cuando solo se menciona el nombre)\n- `searchProductByName(name)`: buscar producto\n- `changeStockByName(name, cantidad)`: modificar cantidad\n- `emptyProductByName(name)`: vaciar stock\n- `setLocationByName(name, ubicacion)`: establecer ubicación\n- `getLocationByName(name)`: consultar ubicación\n- `deleteByName(name)`: eliminar producto\n\n### Generales\n- `getAllProducts()`: listar todos los productos\n\n## SALIDA REQUERIDA\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"nombre_herramienta\",\n    \"params\": {\n      \"sku\": \"string\",\n      \"name\": \"string\",\n      \"cantidad\": 0,\n      \"ubicacion\": \"string\"\n    }\n  }],\n  \"ambiguedades\": []\n}\n```\n\n## REGLAS\n- Si comando menciona SKU → usar herramientas basadas en SKU\n- Si comando menciona solo nombre → usar herramientas basadas en nombre (NO es ambiguo)\n- `changeStock/changeStockByName`: positivo para agregar, negativo para restar\n- Solo marcar como ambiguo si falta información CRÍTICA (ej: cantidad no especificada)\n- Máximo 3 herramientas por plan\n\n## EJEMPLOS\n\n**Comando**: \"Llegaron 50 unidades del producto ABC-123\"\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"changeStock\",\n    \"params\": {\"sku\": \"ABC-123\", \"cantidad\": 50}\n  }],\n  \"ambiguedades\": []\n}\n```\n\n**Comando**: \"Saqué 20 del arroz jazmín\"\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"changeStockByName\",\n    \"params\": {\"name\": \"arroz jazmín\", \"cantidad\": -20}\n  }],\n  \"ambiguedades\": []\n}\n```\n\n**Comando**: \"Cuánto café tenemos\"\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"searchProductByName\",\n    \"params\": {\"name\": \"café\"}\n  }],\n  \"ambiguedades\": []\n}\n```\n\n**Comando**: \"Mueve el tornillo M8 al pasillo 3\"\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"setLocationByName\",\n    \"params\": {\"name\": \"tornillo M8\", \"ubicacion\": \"pasillo 3\"}\n  }],\n  \"ambiguedades\": []\n}\n```\n\n**Comando**: \"Dame la lista completa\"\n```json\n{\n  \"herramientas\": [{\n    \"nombre\": \"getAllProducts\",\n    \"params\": {}\n  }],\n  \"ambiguedades\": []\n}\n```\n\n**Comando**: \"Ingresaron láminas\"\n```json\n{\n  \"herramientas\": [],\n  \"ambiguedades\": [\"No se especificó la cantidad de láminas\"]\n}\n```\n\n---\n## TRANSCRIPCIÓN DEL EMPLEADO:\n{{ $json.text }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "2f8ab26b-6327-460b-90df-16f695d9837c",
+      "name": "Selector"
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $input.first().json.output;\n\n// Ensure string\nraw = String(raw).trim();\n\n// Remove code fences like ```json, ```js, ```\nraw = raw.replace(/```[a-zA-Z]*\\n?/g, \"\").replace(/```/g, \"\");\n\n// Fix JSON keys without quotes\nraw = raw.replace(/([{,])\\s*([^\":\\s]+)\\s*:/g, '$1\"$2\":');\n\n// Fix curly quotes\nraw = raw.replace(/[\\u201C\\u201D]/g, '\"');\n\n// Remove trailing commas\nraw = raw.replace(/,\\s*}/g, \"}\").replace(/,\\s*]/g, \"]\");\n\n// Parse outer JSON\nlet data = JSON.parse(raw);\n\n// If `params` is a stringified JSON, parse it\nif (typeof data.params === \"string\") {\n  try {\n    data.params = JSON.parse(data.params);\n  } catch (e) {\n    // leave as string if not valid JSON\n  }\n}\n\nreturn data;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        0
+      ],
+      "id": "c95689cf-5e9a-4e1e-8643-8c25466c82cd",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1424,
+        -112
+      ],
+      "id": "a29ce7ff-e711-4478-bda4-31771bb023c8",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "HUv5MEwN9aoQtkZr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.ambiguedades }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "array",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "id": "6b2d42d8-5a90-4920-bf6d-70e9559666ad"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ambiguo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "59c0e609-005f-49a5-a57a-addde31109b2",
+                    "leftValue": "={{ $json.ambiguedades }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "array",
+                      "operation": "empty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ejecutar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1152,
+        0
+      ],
+      "id": "ef39065d-3670-4ca6-a377-fd73b8aff7b9",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres un agente que convierte ambigüedades en preguntas breves para empleados del centro logístico.\n\n## ENTRADA\n```json\n[\"ambiguedades\": [\"...\"]}]\n```\n\n## SALIDA\n```json\n{\"message\": \"pregunta concisa\"}\n```\n\n## REGLAS\n- Máximo 15 palabras\n- Si múltiples ambigüedades, agrupar en una pregunta\n- Lenguaje directo\n\n## EJEMPLOS\n\n**In**: `[{\"ambiguedades\": [\"Falta SKU del arroz jazmín\"]}]`\n**Out**: `{\"message\": \"¿Cuál es el SKU del arroz jazmín?\"}`\n\n**In**: `[{\"ambiguedades\": [\"No se especificó cantidad del LAM-001\"]}]`\n**Out**: `{\"message\": \"¿Cuántas unidades del LAM-001?\"}`\n\n**In**: `[{\"ambiguedades\": [\"Falta SKU del tornillo\", \"Falta cantidad\"]}]`\n**Out**: `{\"message\": \"¿SKU y cantidad del tornillo?\"}`\n\n**In**: `[{\"ambiguedades\": [\"No se especificó ubicación del ABC-123\"]}]`\n**Out**: `{\"message\": \"¿Nueva ubicación del ABC-123?\"}`\n\n---\nJSON: {{ $json.ambiguedades }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1424,
+        -272
+      ],
+      "id": "29432b0e-02c0-4c4d-a420-a5f3c9eb0620",
+      "name": "Parlon"
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "voice": {
+          "__rl": true,
+          "value": "2EiwWnXFnvU5JabPnv8n",
+          "mode": "list",
+          "cachedResultName": "Clyde"
+        },
+        "text": "={{ $json.message }}",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        -272
+      ],
+      "id": "94ba554e-3458-4a87-a2bc-4cceba590020",
+      "name": "Convert text to speech",
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "w6YEzRbgp7araVT5",
+          "name": "ElevenLabs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $input.first().json.output;\n\n// Ensure string\nraw = String(raw).trim();\n\n// Remove code fences like ```json, ```js, ```\nraw = raw.replace(/```[a-zA-Z]*\\n?/g, \"\").replace(/```/g, \"\");\n\n// Fix JSON keys without quotes\nraw = raw.replace(/([{,])\\s*([^\":\\s]+)\\s*:/g, '$1\"$2\":');\n\n// Fix curly quotes\nraw = raw.replace(/[\\u201C\\u201D]/g, '\"');\n\n// Remove trailing commas\nraw = raw.replace(/,\\s*}/g, \"}\").replace(/,\\s*]/g, \"]\");\n\n// Parse outer JSON\nlet data = JSON.parse(raw);\n\n// If `params` is a stringified JSON, parse it\nif (typeof data.params === \"string\") {\n  try {\n    data.params = JSON.parse(data.params);\n  } catch (e) {\n    // leave as string if not valid JSON\n  }\n}\n\nreturn data;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -272
+      ],
+      "id": "dd026fa1-a1db-4285-b688-4df8c7dd9eba",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2224,
+        -272
+      ],
+      "id": "753878a3-eb99-462e-8128-19517dde40b2",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres el MOTOR DE EJECUCIÓN Y RESPUESTA del sistema logístico.\nTu objetivo es procesar la ejecución de las herramientas solicitadas y generar una única respuesta final en formato JSON ESTRICTO.\n\n## TUS INSTRUCCIONES\n1. **Análisis**: Lee la lista de herramientas solicitadas en la ENTRADA.\n2. **Ejecución**: Llama a las herramientas conectadas (Tools) usando EXACTAMENTE los parámetros provistos en la entrada.\n3. **Síntesis**: Una vez obtengas los resultados de las herramientas, genera una respuesta narrativa amable para el usuario humano.\n\n## FORMATO DE SALIDA (OBLIGATORIO)\nNO uses bloques de código markdown (```json). Devuelve SOLAMENTE el objeto JSON crudo:\n\n{\n  \"status\": \"success\",\n  \"user_message\": \"Aquí va tu explicación narrativa y amable del resultado para el usuario final (ej: 'Listo, he movido el stock...')\",\n  \"execution_data\": [\n     // Aquí incluyes el resultado técnico crudo que devolvió la herramienta\n  ]\n}\n\n## GUÍA DE NARRATIVA (Campo \"user_message\")\n- **Éxito**: Confirma la acción con datos clave (ej: \"Stock actualizado a 50 unidades\").\n- **Lectura**: Si buscaste datos, resúmelos (ej: \"Encontré 3 productos: A, B y C\").\n- **Error**: Si la herramienta falla, explica por qué en lenguaje sencillo (ej: \"No pude encontrar ese producto\").\n- **Tono**: Profesional, conciso y servicial.\n\n## ENTRADA DEL PLANIFICADOR:\n{{ JSON.stringify($json.herramientas) }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1456,
+        48
+      ],
+      "id": "e41eefcb-675b-4afc-9d24-7a35d400c9d2",
+      "name": "Ejecutor"
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "voice": {
+          "__rl": true,
+          "value": "2EiwWnXFnvU5JabPnv8n",
+          "mode": "list",
+          "cachedResultName": "Clyde"
+        },
+        "text": "={{ $json.user_message }}",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        48
+      ],
+      "id": "cbfcc2e6-7ec3-4d96-b82a-0ca05141b7fa",
+      "name": "Convert text to speech1",
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "w6YEzRbgp7araVT5",
+          "name": "ElevenLabs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $input.first().json.output;\n\n// Ensure string\nraw = String(raw).trim();\n\n// Remove code fences like ```json, ```js, ```\nraw = raw.replace(/```[a-zA-Z]*\\n?/g, \"\").replace(/```/g, \"\");\n\n// Fix JSON keys without quotes\nraw = raw.replace(/([{,])\\s*([^\":\\s]+)\\s*:/g, '$1\"$2\":');\n\n// Fix curly quotes\nraw = raw.replace(/[\\u201C\\u201D]/g, '\"');\n\n// Remove trailing commas\nraw = raw.replace(/,\\s*}/g, \"}\").replace(/,\\s*]/g, \"]\");\n\n// Parse outer JSON\nlet data = JSON.parse(raw);\n\n// If `params` is a stringified JSON, parse it\nif (typeof data.params === \"string\") {\n  try {\n    data.params = JSON.parse(data.params);\n  } catch (e) {\n    // leave as string if not valid JSON\n  }\n}\n\nreturn data;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        48
+      ],
+      "id": "3e139b1f-1165-4029-be5f-2967335b9528",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2224,
+        48
+      ],
+      "id": "185416f2-34e6-45cc-9744-2a33b18378b6",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.headers.uid }}",
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        160
+      ],
+      "id": "9695dd8e-e3a5-4579-b0bb-42e7e8f9d91a",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.headers.uid }}",
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1520,
+        -112
+      ],
+      "id": "a74bd6b9-58d6-49ba-8a33-b7d7141880aa",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://hackmcp.routask.com/mcp",
+        "serverTransport": "httpStreamable",
+        "include": "selected",
+        "includeTools": [
+          "newProduct",
+          "fetchProduct",
+          "changeStock",
+          "emptyProduct",
+          "setLocation",
+          "getLocation",
+          "delete",
+          "updateProduct",
+          "searchProductByName",
+          "changeStockByName",
+          "emptyProductByName",
+          "setLocationByName",
+          "getLocationByName"
+        ],
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        240
+      ],
+      "id": "56f8d898-6440-44ab-8971-c77a747a28f6",
+      "name": "MCP Client"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2112,
+        384
+      ],
+      "id": "dfa792bd-8410-40c4-aa55-f1713efe0744",
+      "name": "OpenAI Chat Model3",
+      "credentials": {
+        "openAiApi": {
+          "id": "HUv5MEwN9aoQtkZr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://hackmcp.routask.com/mcp",
+        "serverTransport": "httpStreamable",
+        "include": "selected",
+        "includeTools": [
+          "createInventoryLog"
+        ],
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.1,
+      "position": [
+        2256,
+        400
+      ],
+      "id": "37fbc8a3-de5b-41db-b4d2-cd9651125229",
+      "name": "MCP Client1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres el AGENTE DE AUDITORÍA E HISTORIAL.\nTu única misión es analizar la operación y registrarla usando la herramienta `createInventoryLog` respetando ESTRICTAMENTE los valores permitidos.\n\n## TUS INSTRUCCIONES\n1. Analiza los `DATOS TÉCNICOS` y el `CONTEXTO NARRATIVO`.\n2. Si la acción fue solo de LECTURA (buscar, consultar, fetch), IGNORA y no hagas nada.\n3. Si hubo cambios, EJECUTA `createInventoryLog`.\n\n## REGLAS DE MAPEO (CRÍTICO: SOLO USA ESTOS 3 VALORES)\n\nEl campo `movement_type` SOLO puede ser uno de estos tres:\n\n### 1. \"in\"\nÚsalo CUANDO:\n- Se agregan unidades al stock (`changeStock` positivo).\n- Se crea un producto nuevo con cantidad inicial mayor a 0 (`newProduct`).\n\n### 2. \"out\"\nÚsalo CUANDO:\n- Se restan unidades al stock (`changeStock` negativo).\n- Se vacía el producto (`emptyProduct`).\n- Se elimina/borra un producto del inventario (`delete`).\n\n### 3. \"adjustment\"\nÚsalo CUANDO:\n- Se cambian atributos sin cambiar cantidad (nombre, descripción).\n- Se cambia la ubicación (`setLocation`).\n- Se crea un producto con 0 stock.\n- Cualquier otro cambio administrativo.\n\n## LÓGICA DE OTROS PARÁMETROS\n- `quantity_moved`: SIEMPRE positivo (valor absoluto). Si es un \"adjustment\" (sin cambio de stock), pon 0.\n- `product_sku`: Extrae el SKU de los datos técnicos.\n- `user_id`: Usa estrictamente el ID provisto en la entrada.\n- `details`: Usa el texto del \"CONTEXTO NARRATIVO\". Es la explicación humana de la acción.\n\n## EJEMPLOS DE PENSAMIENTO\n\n**Caso:** \"Creé arroz con 50 unidades\" (Contexto: \"Se ingresó arroz nuevo...\")\n-> `movement_type`: \"in\"\n-> `details`: \"Se ingresó arroz nuevo...\"\n\n**Caso:** \"Saqué 5 tornillos\" (Contexto: \"Retiro de material para obra...\")\n-> `movement_type`: \"out\"\n-> `details`: \"Retiro de material para obra...\"\n\n**Caso:** \"Moví el martillo a la Bodega B\" (Contexto: \"Reubicación logística...\")\n-> `movement_type`: \"adjustment\"\n-> `details`: \"Reubicación logística...\"\n\n## ENTRADA PARA ANÁLISIS:\n- userID: {{ $('Webhook').item.json.headers.userid }}\n- DATOS TÉCNICOS DE LA OPERACIÓN:\n{{ JSON.stringify($json.execution_data[0]) }}\n- CONTEXTO NARRATIVO:\n{{ $json.user_message }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        208
+      ],
+      "id": "e68ab2ba-f492-4f86-91a4-abf0e911eeb3",
+      "name": "Logger"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        208
+      ],
+      "id": "55081cab-95cd-4d24-9fe7-37ffb64e0ce1",
+      "name": "Wait",
+      "webhookId": "4d0e4cbc-8ff5-4a79-b468-8f69d1aad333"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1456,
+        240
+      ],
+      "id": "54234850-da53-453d-aa6d-909246ca51f1",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "kDbgo0M3lT3C6dm6",
+          "name": "AnthropicCorrecta"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Transcribe audio or video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe audio or video": {
+      "main": [
+        [
+          {
+            "node": "Selector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Selector",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selector": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Parlon",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Parlon",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ejecutor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parlon": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Convert text to speech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert text to speech": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert text to speech1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Convert text to speech1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutor": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Selector",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Parlon",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Client": {
+      "ai_tool": [
+        [
+          {
+            "node": "Ejecutor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Logger",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Client1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Logger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Ejecutor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0a53edd9-7fc5-4170-9e52-1060e2447243",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0de089fe16e9f3a2b82e2aa43e414b9a2fd21b533e40780d2f3b68b1780f4f78"
+  },
+  "id": "dQqTtNkXiOowLenQ",
+  "tags": []
+}
